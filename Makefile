@@ -15,7 +15,8 @@ SRCS = main.cpp \
        src/SOIL.c \
        src/image_DXT.c \
        src/image_helper.c \
-       src/stb_image_aug.c
+       src/stb_image_aug.c \
+       src/Bezier.cpp
 
 OBJS = $(SRCS:.cpp=.o)
 OBJS := $(OBJS:.c=.o)

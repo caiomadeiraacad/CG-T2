@@ -63,6 +63,8 @@ float fuel = 100.0f;
 float lookX = 0;
 float lookY = 0;
 
+bool firstMouse = true;
+
 double nFrames=0;
 double TempoTotal=0;
 Ponto CantoEsquerdo = Ponto (-20,-1,-10);
@@ -121,7 +123,7 @@ Objeto3D buildingAModel;
 Objeto3D buildingBModel;
 Objeto3D buildingCModel;
 Objeto3D barrelModel;
-Objeto3D spaceshipModel; // na falta de um aviao 
+Objeto3D spaceshipModel; // ps: na falta de um aviao coloquei uma nave kkk 
 
 
 Bezier planeRoute[4];
@@ -250,10 +252,11 @@ void DrawAirplane() {
     float airplaneAngle = atan2(dx, dz) * 180.0f / M_PI;
 
     glPushMatrix();
-        glTranslatef(pos.x, 5.0f, pos.z);
+        glTranslatef(pos.x, pos.y, pos.z);
         glRotatef(airplaneAngle, 0, 1, 0);
-        glScalef(4.5f, 4.5f, 4.5f);
-        glColor3f(1.0f, 1.0f, 1.0f);
+        glScalef(2.0f, 2.0f, 2.0f); 
+        glDisable(GL_TEXTURE_2D);
+        glColor3f(1.0f, 0.0f, 0.0f);
         spaceshipModel.desenha();
     glPopMatrix();
 }
@@ -285,7 +288,7 @@ void init(void)
     carModel.leObjeto("assets/tri/sedan.tri");
     buildingAModel.leObjeto("assets/tri/building-sample-tower-a.tri");
     buildingBModel.leObjeto("assets/tri/building-sample-tower-b.tri");
-    buildingBModel.leObjeto("assets/tri/building-sample-tower-c.tri");
+    buildingCModel.leObjeto("assets/tri/building-sample-tower-c.tri");
     barrelModel.leObjeto("assets/tri/barrel.tri");
     spaceshipModel.leObjeto("assets/tri/craft_racer.tri");
 
@@ -772,7 +775,7 @@ void DrawMap()
                         // int sortedBuildingHeight = seed % 2;
                         // if (sortedBuildingHeight == 0) glScalef(0.4f, 1.0f, 0.4f);
                         // else glScalef(0.4f, 1.2f, 0.4f);
-                         glScalef(0.45f, 1.0f, 0.45f);
+                         glScalef(0.5f, 0.5f, 0.5f);
                         
                         glEnable(GL_TEXTURE_2D);
                         glColor3f(1.0f, 1.0f, 1.0f); 
@@ -839,11 +842,11 @@ void DrawHUD() {
     }
 
     glRasterPos2f(20, glutGet(GLUT_WINDOW_HEIGHT) - 30);
-    const char* ctrl1 = "Controles: LEFT/RIGHT (Direção) | ESPACO (Acelerar/Parar)";
+    const char* ctrl1 = "Controles: Esq/Dir (Direção) | ESPACO (Acelerar/Parar)";
     for (const char* c = ctrl1; *c != '\0'; c++) glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
     
     glRasterPos2f(20, glutGet(GLUT_WINDOW_HEIGHT) - 50);
-    const char* ctrl2 = "W,A,S,D (Mover Camera 1a Pessoa) | R (Resetar Camera) | C (Camera 1P/3P)";
+    const char* ctrl2 = "W,A,S,D (Mover Camera) | R (Resetar Camera) | C (Mudar Camera)";
     for (const char* c = ctrl2; *c != '\0'; c++) glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
 
     glEnable(GL_DEPTH_TEST);
@@ -876,18 +879,23 @@ void display( void )
 	glutSwapBuffers();
 }
 
-void mouseMotion(int x, int y) {
-if (isWarping) {
-        isWarping = false;
-        return;
-    }
-
+void passiveMouseMotion(int x, int y) {
     if (CameraMode == 3) {
         int centerX = glutGet(GLUT_WINDOW_WIDTH) / 2;
         int centerY = glutGet(GLUT_WINDOW_HEIGHT) / 2;
-        
-        float dx = x - centerX;
-        float dy = y - centerY;
+
+        if (x == centerX && y == centerY) {
+            return;
+        }
+
+        if (firstMouse) {
+            firstMouse = false;
+            glutWarpPointer(centerX, centerY);
+            return;
+        }
+
+        float dx = (float)(x - centerX);
+        float dy = (float)(y - centerY);
 
         camera3RotX += dx * 0.02f; 
         camera3RotY += dy * 0.02f;
@@ -895,7 +903,6 @@ if (isWarping) {
         if (camera3RotY < 5.0f) camera3RotY = 5.0f;
         if (camera3RotY > 175.0f) camera3RotY = 175.0f;
 
-        isWarping = true;
         glutWarpPointer(centerX, centerY);
         glutPostRedisplay();
     }
@@ -918,18 +925,16 @@ void mouseClick(int button, int state, int x, int y) {
 // **********************************************************************
 void keyboard ( unsigned char key, int x, int y )
 {
-	switch ( key )
-	{
-    case 27:        // Termina o programa qdo
-      exit ( 0 );   // a tecla ESC for pressionada
+    switch ( key )
+    {
+    case 27: 
+      exit ( 0 );   
       break;
     case 32:
         if (speedVehicle == 0.0f) {
             speedVehicle = (float)mapX / 10.0f;
-            printf("veiculo andando\n");
         } else {
             speedVehicle = 0.0f;
-            printf("veiculo parado\n");
         }
         break;
     case 'c':
@@ -946,28 +951,44 @@ void keyboard ( unsigned char key, int x, int y )
             init();
             glutPostRedisplay();
             break;
-    case 'a': case 'A':
-        lookX += 5.0f;
+    case 'a': case 'A': 
+        if (CameraMode == 3) {
+            camera3RotX -= 5.0f; 
+        } else {
+            lookX += 5.0f;     
+        }
         break;
-    case 'd': case 'D':
-        lookX -= 5.0f; 
+    case 'd': case 'D': 
+        if (CameraMode == 3) {
+            camera3RotX += 5.0f; 
+        } else {
+            lookX -= 5.0f;      
+        }
         break;
     case 'w': case 'W':
-        lookY += 5.0f;
-        if (lookY > 80.0f) lookY = 80.0f; 
+        if (CameraMode == 3) {
+            camera3RotY -= 5.0f; 
+            if (camera3RotY < 5.0f) camera3RotY = 5.0f; 
+        } else {
+            lookY += 5.0f;      
+            if (lookY > 80.0f) lookY = 80.0f; 
+        }
         break;
     case 's': case 'S':
-        lookY -= 5.0f;
-        if (lookY < -80.0f) lookY = -80.0f;
+        if (CameraMode == 3) {
+            camera3RotY += 5.0f; 
+            if (camera3RotY > 175.0f) camera3RotY = 175.0f;
+        } else {
+            lookY -= 5.0f;      
+            if (lookY < -80.0f) lookY = -80.0f;
+        }
         break;
     case 'r': case 'R':
-        lookX = 0.0f;
+        lookX = 0.0f; 
         lookY = 0.0f;
+        camera3RotX = 180.0f;
+        camera3RotY = 30.0f;
         break;
-
-    default:
-            cout << key;
-    break;
   }
 }
 
@@ -1030,9 +1051,9 @@ int main ( int argc, char** argv )
 	glutKeyboardFunc ( keyboard );
 	glutSpecialFunc ( arrow_keys );
 
-    glutPassiveMotionFunc(mouseMotion);
-    glutSetCursor(GLUT_CURSOR_NONE);
-    //glutMouseFunc(mouseClick);
+    // glutPassiveMotionFunc(passiveMouseMotion);
+    //glutSetCursor(GLUT_CURSOR_NONE);
+    // glutMouseFunc(mouseClick);
 
 	glutIdleFunc ( animate );
 

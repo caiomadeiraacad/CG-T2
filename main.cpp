@@ -37,6 +37,7 @@ using namespace std;
 #include "src/ListaDeCoresRGB.h"
 #include "src/Ponto.h"
 #include "src/Texture.h"
+#include "src/Bezier.h"
 
 Temporizador T;
 double AccumDeltaT=0;
@@ -100,6 +101,7 @@ class AABBBoundingBox {
 #define COMBUSTIVEL 30
 #define VEICULO 40
 
+bool isWarping = false;
 
 // Matriz que armazena informacoes sobre o que existe na cidade
 Elemento Cidade[100][100];
@@ -120,6 +122,16 @@ Objeto3D buildingBModel;
 Objeto3D buildingCModel;
 Objeto3D barrelModel;
 Objeto3D spaceshipModel; // na falta de um aviao 
+
+
+Bezier planeRoute[4];
+float t_plane = 0.0f;
+int current_curve = 0;
+
+int lastMouseX = -1;
+int lastMouseY = -1;
+float camera3RotX = 180.0f;
+float camera3RotY = 30.0f;
 
 void SpawnFuel() 
 {
@@ -156,6 +168,17 @@ void LoadMap(const char* filename) {
     printf("mapa carregado: %dx%d\n", mapX, mapZ);
 }
 
+void InitBezier() {
+    float W = (float)mapX;
+    float H = (float)mapZ;
+    float Y = 8.0f;
+
+    planeRoute[0] = Bezier(Ponto(W/2, Y, 0), Ponto(0, Y, 0), Ponto(0, Y, H/2));
+    planeRoute[1] = Bezier(Ponto(0, Y, H/2), Ponto(0, Y, H), Ponto(W/2, Y, H));
+    planeRoute[2] = Bezier(Ponto(W/2, Y, H), Ponto(W, Y, H), Ponto(W, Y, H/2));
+    planeRoute[3] = Bezier(Ponto(W, Y, H/2), Ponto(W, Y, 0), Ponto(W/2, Y, 0));
+}
+
 void UpdateCamera() {
     float angleRads = angleVehicle * M_PI / 180.0f;
     float dirX = sin(angleRads);
@@ -168,21 +191,28 @@ void UpdateCamera() {
     float targetDirY =  sin(lookY * M_PI / 180.0f); 
 
     if (CameraMode == 3) {
-        OBS.x = PosVehicle.x - (dirX * 5.0f);
-        OBS.y = PosVehicle.y + 4.0f;
-        OBS.z = PosVehicle.z - (dirZ * 5.0f);
+        float radX = camera3RotX * M_PI / 180.0f;
+        float radY = camera3RotY * M_PI / 180.0f;
+        float dist = 10.0f;
+
+        OBS.x = PosVehicle.x + dist * sin(radY) * sin(radX);
+        OBS.y = PosVehicle.y + dist * cos(radY);
+        OBS.z = PosVehicle.z + dist * sin(radY) * cos(radX);
 
         ALVO = PosVehicle;
-
-        ALVO.x = PosVehicle.x + (targetDirX * 5.0f);
-        ALVO.y = PosVehicle.y + (targetDirY * 5.0f);
-        ALVO.z = PosVehicle.z + (targetDirZ * 5.0f);
     }
     else if (CameraMode == 1) {
         float offsetFront = 0.6f;
         OBS.x = PosVehicle.x + (dirX * offsetFront);
         OBS.y = PosVehicle.y + 0.4f;
         OBS.z = PosVehicle.z + (dirZ * offsetFront);
+
+        float radYaw = (angleVehicle + lookX) * M_PI / 180.0f;
+        float radPitch = lookY * M_PI / 180.0f;
+
+        float targetDirX = cos(radPitch) * sin(radYaw);
+        float targetDirY = sin(radPitch);
+        float targetDirZ = cos(radPitch) * cos(radYaw);
 
         ALVO.x = OBS.x + (targetDirX * 5.0f);
         ALVO.y = OBS.y + (targetDirY * 5.0f);
@@ -191,14 +221,39 @@ void UpdateCamera() {
 }
 
 void DrawAirplane() {
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_LIGHTING);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glLineWidth(1.0f);
+    for(int i=0; i<4; i++) {
+        glBegin(GL_LINE_STRIP);
+        for(float t=0; t<=1.0f; t+=0.1f) {
+            Ponto P = planeRoute[i].Calcula(t);
+            glVertex3f(P.x, P.y, P.z);
+        }
+        glEnd();
+    }
+    glEnable(GL_LIGHTING);
+
+    Ponto pos = planeRoute[current_curve].Calcula(t_plane);
+    
+    float t_next = t_plane + 0.05f;
+    int next_curva = current_curve;
+    if (t_next > 1.0f) {
+        t_next -= 1.0f;
+        next_curva = (current_curve + 1) % 4;
+    }
+    Ponto posNext = planeRoute[next_curva].Calcula(t_next);
+    
+    float dx = posNext.x - pos.x;
+    float dz = posNext.z - pos.z;
+    float airplaneAngle = atan2(dx, dz) * 180.0f / M_PI;
+
     glPushMatrix();
-        float flyX = sin(angulo * 0.02f) * 15.0f;
-        float flyZ = cos(angulo * 0.02f) * 15.0f;
-        glTranslatef(flyX, 10.0f, flyZ);
-        glRotatef(angulo * 5.0f, 0, 1, 0); 
-        
-        glScalef(0.5f, 0.5f, 0.5f);
-        // glColor3f(0.8f, 0.8f, 0.8f);
+        glTranslatef(pos.x, 5.0f, pos.z);
+        glRotatef(airplaneAngle, 0, 1, 0);
+        glScalef(4.5f, 4.5f, 4.5f);
+        glColor3f(1.0f, 1.0f, 1.0f);
         spaceshipModel.desenha();
     glPopMatrix();
 }
@@ -207,9 +262,8 @@ void DrawVehicle() {
     glPushMatrix();
         glTranslatef(PosVehicle.x, 0.0f, PosVehicle.z);
         glRotatef(angleVehicle, 0, 1, 0);
-
         glScalef(0.2f, 0.2f, 0.2f);
-        // DesenhaCubo(1.0f);
+        
         glEnable(GL_TEXTURE_2D);
         glColor3f(1.0f, 1.0f, 1.0f);
         UseTexture(12);
@@ -220,7 +274,6 @@ void DrawVehicle() {
         glDisable(GL_TEXTURE_2D);
     glPopMatrix();
 }
-
 // **********************************************************************
 //  void init(void)
 //        Inicializa os parametros globais de OpenGL
@@ -234,9 +287,10 @@ void init(void)
     buildingBModel.leObjeto("assets/tri/building-sample-tower-b.tri");
     buildingBModel.leObjeto("assets/tri/building-sample-tower-c.tri");
     barrelModel.leObjeto("assets/tri/barrel.tri");
-    spaceshipModel.leObjeto("assets/tri/craft_race.tri");
+    spaceshipModel.leObjeto("assets/tri/craft_racer.tri");
 
     LoadMap("Mapa1.txt");
+    InitBezier();
 
     LoadTexture("assets/CROSS.png"); // 1
     LoadTexture("assets/DL.png");    // 2
@@ -294,6 +348,12 @@ void animate()
     AccumDeltaT += dt;
     TempoTotal += dt;
     nFrames++;
+
+    t_plane += 0.15f * dt;
+    if (t_plane >= 1.0f) {
+        t_plane -= 1.0f;
+        current_curve = (current_curve + 1) % 4;
+    }
 
     if (AccumDeltaT > 1.0/30) 
     {
@@ -669,7 +729,7 @@ void DrawMap()
                     glTranslatef(0.0f, 0.5f, 0.0f);
                     glRotatef(angulo * 5.0f, 0, 1, 0);
                     glScalef(0.8f, 0.8f, 0.8f);
-                    glColor3f(1.0f, 0.5f, 0.0f);
+                    // glColor3f(1.0f, 0.5f, 0.0f);
                     barrelModel.desenha();
                 glPopMatrix();
             }
@@ -678,7 +738,8 @@ void DrawMap()
                 glPushMatrix();
                     glTranslatef(0.0, 0.5f, 0.0f);
                     glRotatef(angulo * 5.0f, 0, 1, 0);
-                    glScalef(0.8f, 0.8f, 0.8f);
+                    glScalef(1.0f, 1.0f, 1.0f);
+                    glDisable(GL_TEXTURE_2D);
                     glColor3f(1.0f, 0.5f, 0.0f);
                     barrelModel.desenha();
                 glPopMatrix();
@@ -815,6 +876,40 @@ void display( void )
 	glutSwapBuffers();
 }
 
+void mouseMotion(int x, int y) {
+if (isWarping) {
+        isWarping = false;
+        return;
+    }
+
+    if (CameraMode == 3) {
+        int centerX = glutGet(GLUT_WINDOW_WIDTH) / 2;
+        int centerY = glutGet(GLUT_WINDOW_HEIGHT) / 2;
+        
+        float dx = x - centerX;
+        float dy = y - centerY;
+
+        camera3RotX += dx * 0.2f; 
+        camera3RotY += dy * 0.2f;
+
+        if (camera3RotY < 5.0f) camera3RotY = 5.0f;
+        if (camera3RotY > 175.0f) camera3RotY = 175.0f;
+
+        isWarping = true;
+        glutWarpPointer(centerX, centerY);
+        glutPostRedisplay();
+    }
+}
+
+void mouseClick(int button, int state, int x, int y) {
+    if (state == GLUT_DOWN) {
+        lastMouseX = x;
+        lastMouseY = y;
+    } else {
+        lastMouseX = -1;
+        lastMouseY = -1;
+    }
+}
 
 // **********************************************************************
 //  void keyboard ( unsigned char key, int x, int y )
@@ -934,6 +1029,11 @@ int main ( int argc, char** argv )
 	glutReshapeFunc ( reshape );
 	glutKeyboardFunc ( keyboard );
 	glutSpecialFunc ( arrow_keys );
+
+    glutPassiveMotionFunc(mouseMotion);
+    glutSetCursor(GLUT_CURSOR_NONE);
+    //glutMouseFunc(mouseClick);
+
 	glutIdleFunc ( animate );
 
 	glutMainLoop ( );

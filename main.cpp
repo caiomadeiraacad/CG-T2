@@ -889,8 +889,8 @@ if (isWarping) {
         float dx = x - centerX;
         float dy = y - centerY;
 
-        camera3RotX += dx * 0.2f; 
-        camera3RotY += dy * 0.2f;
+        camera3RotX += dx * 0.02f; 
+        camera3RotY += dy * 0.02f;
 
         if (camera3RotY < 5.0f) camera3RotY = 5.0f;
         if (camera3RotY > 175.0f) camera3RotY = 175.0f;

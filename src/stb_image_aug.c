@@ -63,7 +63,7 @@
              on 'test' only check type, not whether we support this variant
 */
 
-#include "stb_image_aug.h"
+#include "SOIL/stb_image_aug.h"
 
 #ifndef STBI_NO_HDR
 #include <math.h>  // ldexp
@@ -103,7 +103,7 @@ typedef unsigned char validate_uint32[sizeof(uint32)==4];
 #endif
 
 #ifndef STBI_NO_DDS
-#include "stbi_DDS_aug.h"
+#include "SOIL/stbi_DDS_aug.h"
 #endif
 
 //	I (JLD) want full messages for SOIL
